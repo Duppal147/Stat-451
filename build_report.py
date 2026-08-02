@@ -7,95 +7,135 @@ def img(name):
     b = base64.b64encode(open(f"figures/{name}", "rb").read()).decode()
     return f"data:image/png;base64,{b}"
 
+# Figures sit next to the text that cites them, so a 600-word paper does not
+# make the reader scroll past the whole argument to reach Figure 1.
+FIGS = {  # key -> (file, number, caption)
+    "curves": ("fig2_curves.png", 1, "Estimated probability of malignancy "
+               "against the strongest measurement in each of four groups."),
+    "redundancy": ("fig1_redundancy.png", 2, "The 30 features carry far less "
+                   "than 30 measurements&rsquo; worth of information."),
+    "stability": ("fig6_stability.png", 3, "Bootstrap selection frequency: "
+                  "LASSO always wants size, but cannot say which size feature."),
+    "surface": ("fig3_surface.png", 4,
+                f"{R['pair'][0].capitalize()} and {R['pair'][1]}, the best pair "
+                f"of weakly correlated measurements we found (RBF-SVM, "
+                f"cross-validated AUC {R['pair_auc']:.3f}; best of a search, so "
+                "a ceiling rather than an unbiased estimate). A large nucleus "
+                "is malignant whatever its smoothness; smoothness only matters "
+                "for mid-sized ones."),
+    "howfew": ("fig5_howfew.png", 5, "Cross-validated discrimination against "
+               "the number of features retained."),
+    "test": ("fig7_test.png", 6, f"Both models on the {R['n_test']} test "
+             "masses, scored in a single pass."),
+}
+
+def fig(key):
+    f, n, cap = FIGS[key]
+    return (f'<figure><img src="{img(f)}" alt="Figure {n}">'
+            f"<figcaption><b>Figure {n}.</b> {cap}</figcaption></figure>")
+
+# The chosen features, read out of results.json rather than retyped.
+SIX = R["final_features"]
+SIX_LIST = ", ".join(SIX[:-1]) + " and " + SIX[-1]
+HYPER = ", ".join(f"{k} = {v}" for k, v in R["best_params"].items())
+NUMWORD = {1: "One", 2: "Two", 3: "Three", 4: "Four", 5: "Five", 6: "Six",
+           7: "Seven", 8: "Eight"}
+def numword(n):
+    return NUMWORD.get(n, str(n)).lower()
+KW = NUMWORD.get(R["K"], str(R["K"]))         # "Six"
+kw = KW.lower()                               # "six"
+
 BODY = f"""
 <p class="lead">In a fine-needle breast biopsy the sample is photographed and software
-measures the cell nuclei. We asked which measurements separate malignant masses
-from benign ones, and how few you need. Using {R['n']} masses from the Wisconsin Diagnostic dataset,
-we found the 30 features boil down to about six: nucleus <b>size</b>, how
-<b>indented</b> the edges are, and <b>texture</b>. Our model caught every malignant mass in the {R['n_test']} we held
-out, and flagged {R['fp_per100_benign']} per 100 benign masses for follow-up. Every model did about equally well, so the variables mattered more.</p>
+measures the cell nuclei. Which of 30 such measurements separate malignant
+from benign masses, and how few do you need? Across {R['n']} Wisconsin
+Diagnostic masses every model scored alike, so the variables mattered more:
+nucleus <b>size</b>, edge <b>indentation</b> and <b>texture</b>.
+{KW} match all thirty, and ours caught every malignant mass in the
+{R['n_test']} held out, flagging {R['fp_per100_benign']} per 100 benign for
+follow-up.</p>
 
 <h2>Data and methods</h2>
-<p>There are {R['n']} masses, {R['pct_malignant']}% malignant, and 30 features:
-ten nuclear measurements, each reported as a mean, a standard error, and a
-&ldquo;worst&rdquo; value (the average of its three largest values). Nothing is
-missing. We split once, 80/20 stratified, and standardized on training data
-only. Everything after that (model, hyperparameters,
-feature ranking, cutoff) came from 5-fold cross-validation on the
-{R['n_train']} training masses. We left the {R['n_test']} test masses alone
-until the end.</p>
+<p>There are {R['n']} masses, {R['pct_malignant']:.0f}% malignant. Ten nuclear
+measurements are each reported three ways &mdash; mean, standard error and a
+&ldquo;worst&rdquo; value (mean of the three largest) &mdash; giving 30
+features, none missing. We split once, 80/20 stratified, standardizing on
+training data only. Model, hyperparameters, feature ranking and cutoff came from
+5-fold cross-validation on the {R['n_train']} training masses; both final models
+were fixed before we opened the {R['n_test']} test masses, then scored in one
+pass.</p>
 
-<h2>What separates the two groups</h2>
-<p>Size and shape almost separate the groups by themselves, while texture and
+<h2>What separates them</h2>
+<p>Size and shape almost separate the groups by themselves; texture and
 smoothness only shift the odds (Figure 1). But the features repeat each other:
-{R['pairs_r90']} of the {R['n_pairs']} pairs correlate above 0.90, and radius,
+{R['pairs_r90']} of {R['n_pairs']} pairs correlate above 0.90, and radius,
 perimeter and area are one measurement three times over (r up to {R['max_r']},
 Figure 2), so single coefficients are not trustworthy.</p>
 
-<p>To show why, we refit LASSO on 200 bootstrap resamples (Figure 3). Some size feature is
-kept every time, but which one is close to random: worst radius
-{R['size_freq']['worst radius']:.0f}%, worst area
-{R['size_freq']['worst area']:.0f}%, worst perimeter
-{R['size_freq']['worst perimeter']:.0f}%, mean perimeter
-{R['size_freq']['mean perimeter']:.0f}%. Size matters; no one size column does.</p>
+{fig('curves')}
+{fig('redundancy')}
 
-<p>The feature it keeps most reliably is <b>worst texture</b>, in 100% of
-resamples and first on out-of-fold permutation importance, though alone it ranks only 17th
-of 30 (AUC 0.79). Because it is almost uncorrelated with size
-(r&nbsp;=&nbsp;0.37), it adds what size cannot (Figure 4). Across all ten, the
-&ldquo;worst&rdquo; versions beat the means
+<p>So we refit LASSO on 200 bootstrap resamples (Figure 3). Some size feature
+is kept every time, but which one is close to random: worst radius
+{R['size_freq']['worst radius']:.0f}%, worst area
+{R['size_freq']['worst area']:.0f}%, mean perimeter
+{R['size_freq']['mean perimeter']:.0f}%. Size matters; no one size column
+does.</p>
+
+{fig('stability')}
+
+<p>It keeps <b>{R['stable_first']}</b> most reliably &mdash;
+{R['stable_first_freq']:.0f}% of resamples, and first on out-of-fold permutation
+importance &mdash; though alone it ranks {R['stable_first_rank']}th of 30 (AUC
+{R['stable_first_auc']:.2f}). Almost uncorrelated with size
+(r&nbsp;=&nbsp;{R['stable_first_r_size']:.2f}), it adds what size cannot, as
+weak-looking smoothness does where size is ambiguous (Figure 4). Across all ten,
+the &ldquo;worst&rdquo; versions beat the means
 ({R['group_power']['worst']:.2f} vs {R['group_power']['mean']:.2f} average AUC),
 so extreme readings help more.</p>
 
-<h2>Six features are enough</h2>
-<p>We re-ranked features inside each fold, keeping only uncorrelated ones. Six reach cross-validated AUC {R['auc_at_K']:.3f},
-against {R['full30_auc']:.3f} for all thirty (Figure 5). Principal components
-gain only {R['auc_pca_k']['6'] - R['auc_at_K']:.3f} AUC at six, and none is
-something a pathologist could measure.</p>
+{fig('surface')}
+
+<h2>{KW} features are enough</h2>
+<p>Re-ranking features inside each fold and keeping only weakly correlated ones
+(|r|&nbsp;&lt;&nbsp;0.8), {kw} reach cross-validated AUC {R['auc_at_K']:.3f}
+against {R['full30_auc']:.3f} for all thirty (Figure 5): {SIX_LIST} &mdash;
+{R['final_mix']}. That is a judgement call: it clears our 0.005 tolerance by a
+hair, and a stricter one gives {numword(R['K_strict'])}. Principal
+components &mdash; uncorrelated blends of all 30 &mdash; gain
+{R['pca_gain_at_K']:.3f} AUC here, none measurable by a pathologist.</p>
+
+{fig('howfew')}
 
 <h2>How well it works</h2>
-<p>The RBF-kernel SVM had the best cross-validated AUC ({R['best_cv_auc']:.3f}),
-but three others came within 0.001. Because missing a cancer is worse than a
-false alarm, we picked the cutoff ({R['threshold']:.2f}) for
-{R['target_sens']}% training sensitivity rather than best accuracy. On the test
-set it caught all {R['tp']} malignant masses at {R['test_spec']}% specificity
-and {R['test_acc']}% accuracy, against {R['baseline_acc']}% for guessing benign
-every time (Figure 6). Training AUC ({R['train_auc_best']:.3f}) was no
-higher than test ({R['test_auc']:.3f}), so it does not look overfit.</p>
+<p>The {R['best_model']} won on cross-validated AUC
+({R['best_cv_auc']:.3f}; {HYPER}), with {numword(R['n_within_001'])} others within 0.001;
+only the decision tree lagged ({R['tree_auc']:.3f}), its axis-aligned splits
+cutting a diagonal boundary. Because a missed cancer costs more than a false
+alarm, we set the cutoff ({R['threshold']:.2f}) for {R['target_sens']}% training
+sensitivity. On test it caught all {R['tp']} malignant masses at
+{R['test_spec']}% specificity and {R['test_acc']}% accuracy, against
+{R['baseline_acc']}% for always guessing benign (Figure 6); the {kw} named
+features also caught all {R['tp']}, at {R['test_spec_reduced']}%. Training AUC
+({R['train_auc_best']:.3f}) did not exceed test ({R['test_auc']:.3f}): no
+overfitting.</p>
+
+{fig('test')}
 
 <h2>Weaknesses</h2>
-<p>All the data came from one Wisconsin lab in the early 1990s, with hand-picked,
-human-segmented samples. With only {R['n_test']} test cases, specificity is
-good to about &plusmn;5 points, and {R['tp']} out of {R['tp']} would not hold up
-in a clinic.</p>
+<p>All data came from one Wisconsin lab in the early 1990s, hand-picked and
+human-segmented. With only {R['n_test']} test cases, specificity is good
+to about &plusmn;5 points, and {R['tp']} of {R['tp']} would not hold up in a
+clinic. Our cutoff, chosen on cross-validated probabilities but applied to a
+model refit on all {R['n_train']}, holds its {R['target_sens']}% floor only
+approximately.</p>
 
 <h2>Conclusion</h2>
 <p>Malignant nuclei are bigger, more deeply indented and more unevenly textured,
-and the worst reading of a measurement tells you more than the average. Six
-measurements do about as well as thirty, and a short list is one a lab could
-actually check. Next would be testing on another lab&rsquo;s images.</p>
+and a measurement&rsquo;s worst reading tells you more than its average. {KW}
+measurements do about as well as thirty &mdash; a list a lab could actually
+check. Next would be another lab&rsquo;s images.</p>
 """
-
-FIGS = [  # captions are f-strings where they quote numbers
-
-    ("fig2_curves.png", "Figure 1.", "Estimated probability of malignancy against "
-     "the strongest measurement in each of four groups."),
-    ("fig1_redundancy.png", "Figure 2.", "The 30 features carry far less than 30 "
-     "measurements&rsquo; worth of information."),
-    ("fig6_stability.png", "Figure 3.", "Bootstrap selection frequency: LASSO "
-     "always wants size, but cannot say which size feature."),
-    ("fig3_surface.png", "Figure 4.", f"{R['pair'][0].capitalize()} and "
-     f"{R['pair'][1]}, the best pair of uncorrelated measurements we found "
-     f"(RBF-SVM, cross-validated AUC {R['pair_auc']:.3f}; best of a search, so "
-     "a ceiling rather than an unbiased estimate). A large nucleus is malignant "
-     "whatever its smoothness; smoothness only matters for mid-sized ones."),
-    ("fig5_howfew.png", "Figure 5.", "Cross-validated discrimination against the "
-     "number of features retained."),
-    ("fig7_test.png", "Figure 6.", "Performance on the 114 test masses, used once."),
-]
-FIGHTML = "\n".join(
-    f'<figure><img src="{img(f)}" alt="{cap}"><figcaption><b>{n}</b> {cap}'
-    f"</figcaption></figure>" for f, n, cap in FIGS)
 
 HTML = f"""<!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8">
@@ -154,8 +194,6 @@ HTML = f"""<!DOCTYPE html>
 
 {BODY}
 
-{FIGHTML}
-
 <h2>Contributions</h2>
 <table>
   <tr><th>Member</th><th class="n">Proposal</th><th class="n">Coding</th>
@@ -183,9 +221,15 @@ Meinshausen &amp; B&uuml;hlmann (2010), <i>J.&nbsp;R.&nbsp;Stat.&nbsp;Soc.&nbsp;
 
 pathlib.Path("report.html").write_text(HTML, encoding="utf-8")
 
-# word count of the prose the grader reads (body + conclusion, no captions/refs)
-text = re.sub(r"<[^>]+>", " ", BODY)
+# Word count of the prose the grader reads: headings and paragraphs, with the
+# figures (captions included) stripped out, since the brief allows "600 words or
+# less with supporting graphics".
+text = re.sub(r"<figure>.*?</figure>", " ", BODY, flags=re.S)
+text = re.sub(r"<[^>]+>", " ", text)
 text = text.replace("&ldquo;", '"').replace("&rdquo;", '"').replace("&nbsp;", " ")
-text = re.sub(r"&[a-z]+;", "", text)
-words = len(text.split())
-print(f"report.html written. Body word count: {words}")
+text = re.sub(r"&[a-z]+;", " ", text)
+# Count only tokens with a letter or digit in them, so a standalone em dash is
+# not scored as a word (wordcounter.net does not count one either).
+words = sum(1 for w in text.split() if re.search(r"[A-Za-z0-9]", w))
+flag = "" if words <= 600 else "  *** OVER THE 600-WORD LIMIT ***"
+print(f"report.html written. Body word count: {words}{flag}")

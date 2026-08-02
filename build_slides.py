@@ -3,6 +3,19 @@ import base64, json, pathlib
 
 R = json.load(open("results.json"))
 
+# Everything the deck quotes comes out of results.json, so a rerun of the
+# analysis cannot leave a stale number on a slide.
+SIX = R["final_features"]
+SIX_LIST = ", ".join(SIX[:-1]) + " and " + SIX[-1]
+HYPER = ", ".join(f"{k} = {v}" for k, v in R["best_params"].items())
+NUMWORD = {4: "Four", 5: "Five", 6: "Six", 7: "Seven", 8: "Eight"}
+KW = NUMWORD.get(R["K"], str(R["K"]))
+kw = KW.lower()
+# The headline spread is dominated by the one model that lags, so quote the
+# spread among the rest as well rather than letting the tree speak for everyone.
+_others = [a for n, a, *_ in R["cv_table"] if n != "Decision tree"]
+SPREAD_NO_TREE = max(_others) - min(_others)
+
 def img(name):
     b = base64.b64encode(open(f"figures/{name}", "rb").read()).decode()
     return f"data:image/png;base64,{b}"
@@ -40,7 +53,7 @@ SLIDES.append(slide(
     points=[
         "In a fine-needle breast biopsy, the sample is photographed and "
         "software measures the <b>cell nuclei</b>.",
-        f"<b>{R['n']} masses</b>, {R['pct_malignant']}% malignant. Ten "
+        f"<b>{R['n']} masses</b>, {R['pct_malignant']:.0f}% malignant. Ten "
         "measurements, each reported three ways (mean, standard error, and a "
         "&ldquo;worst&rdquo; value), so 30 features.",
         "<b>Which measurements actually separate malignant from benign, and "
@@ -73,29 +86,47 @@ SLIDES.append(slide(
 SLIDES.append(slide(
     "Bonnie", "Model comparison", "Which model should we use?",
     fig="fig4_models.png",
-    note=f"All tuned by cross-validation on the training set. The RBF-SVM wins "
-         f"by {R['best_cv_auc'] - 0.9959:.4f} AUC over a linear SVM, which is "
-         f"not a difference a patient would notice. The decision tree is the "
-         f"one that lags: its splits are axis-aligned while the two groups "
-         f"separate along a diagonal, and a single tree varies a lot from fold "
-         f"to fold."))
+    note=f"All tuned by cross-validation on the training set. {R['best_model']} "
+         f"({HYPER}) wins by {R['runner_up_gap']:.4f} AUC over {R['runner_up']}, "
+         f"which is not a difference a patient would notice. The decision tree "
+         f"is the one that lags ({R['tree_auc']:.3f}): its splits are "
+         f"axis-aligned while the two groups separate along a diagonal, and a "
+         f"single tree varies a lot from fold to fold."))
+
+SLIDES.append(slide(
+    "Bonnie", "Model comparison", "&hellip;and it barely mattered",
+    points=[
+        f"Best to worst is <b>{R['auc_spread']:.3f} AUC</b> across seven tuned "
+        f"models, and nearly all of it is the decision tree: the other six sit "
+        f"within <b>{SPREAD_NO_TREE:.3f}</b> of each other.",
+        "We ranked models by <b>AUC</b>, which does not depend on where you put "
+        "the cutoff, and then chose the cutoff separately on the cost of a "
+        "missed cancer.",
+    ],
+    big="If the algorithm is not the story, the variables are. So that is where "
+        "we spent the rest of our time."))
 
 SLIDES.append(slide(
     "Dhruvika", "Cutting it down", "How many features do we actually need?",
     fig="fig5_howfew.png",
-    note=f"Principal components (uncorrelated axes sorted by how much variance "
-         f"they explain) do slightly better, but by at most 0.009 AUC. You also "
-         f"need {R['pc_for_95']} of them for 95% of the variance, and none is "
-         f"something a pathologist could measure."))
+    note=f"{KW} named measurements ({SIX_LIST}) reach "
+         f"{R['auc_at_K']:.3f} AUC against {R['full30_auc']:.3f} for all 30. "
+         f"Principal components (uncorrelated axes sorted by how much variance "
+         f"they explain) do slightly better, but by at most "
+         f"{R['pca_gain_max']:.3f} AUC. You also need {R['pc_for_95']} of them "
+         f"for 95% of the variance, and none is something a pathologist could "
+         f"measure."))
 
 SLIDES.append(slide(
     "Dhruvika", "A surprise", "One result we did not expect",
     points=[
-        "<b>worst texture</b> is kept in <b>100%</b> of resamples and comes "
-        "<b>first</b> on out-of-fold permutation importance.",
-        "But on its own it ranks only <b>17th of 30</b> (AUC 0.79).",
-        "We think that is because it is almost uncorrelated with size "
-        "(r&nbsp;=&nbsp;0.37).",
+        f"<b>{R['stable_first']}</b> is kept in "
+        f"<b>{R['stable_first_freq']:.0f}%</b> of resamples and comes "
+        f"<b>first</b> on out-of-fold permutation importance.",
+        f"But on its own it ranks only <b>{R['stable_first_rank']}th of 30</b> "
+        f"(AUC {R['stable_first_auc']:.2f}).",
+        f"We think that is because it is almost uncorrelated with size "
+        f"(r&nbsp;=&nbsp;{R['stable_first_r_size']:.2f}).",
     ],
     big="What matters is whether a feature adds something new, not how strong "
         "it looks on its own."))
@@ -118,8 +149,11 @@ SLIDES.append(slide(
          f"set we caught <b>{R['tp']} of {R['tp']+R['fn']}</b> malignant "
          f"masses, at {R['test_spec']}% specificity and {R['test_acc']}% "
          f"accuracy, against {R['baseline_acc']}% for guessing benign every "
-         f"time. Training AUC {R['train_auc_best']:.3f} vs test "
-         f"{R['test_auc']:.3f}, so it does not look overfit."))
+         f"time. The {kw} named features caught all {R['tp']} too, at "
+         f"{R['test_spec_reduced']}% specificity. Training AUC "
+         f"{R['train_auc_best']:.3f} vs test {R['test_auc']:.3f}, so it does "
+         f"not look overfit. Both models were fixed before we opened the test "
+         f"set, and we scored them in one pass."))
 
 SLIDES.append(slide(
     "All five", "Conclusion", "What we found",
@@ -129,8 +163,8 @@ SLIDES.append(slide(
         f"A measurement&rsquo;s <b>worst</b> reading beats its <b>average</b> "
         f"({R['group_power']['worst']:.2f} vs "
         f"{R['group_power']['mean']:.2f} average AUC).",
-        f"<b>Six</b> measurements do about as well as thirty "
-        f"({R['auc_at_K']:.3f} vs {R['full30_auc']:.3f} AUC).",
+        f"<b>{KW}</b> measurements do about as well as thirty "
+        f"({R['auc_at_K']:.3f} vs {R['full30_auc']:.3f} AUC): {SIX_LIST}.",
         "<b>Weaknesses:</b> one lab, early 1990s, hand-picked and "
         "human-segmented samples. Only 114 test cases, so specificity is good "
         "to about &plusmn;5 points.",

@@ -9,8 +9,9 @@ Protocol (this is the part the proposal got wrong, now fixed):
   * ONE stratified 80/20 train/test split.
   * ALL model choice, hyperparameter tuning, feature ranking and threshold
     selection happen by 5-fold stratified CV *inside the training set*.
-  * The test set is touched EXACTLY ONCE, at the very end, on the single
-    preferred model.
+  * The test set is touched in ONE pass at the very end, scoring the two models
+    fixed before that pass: the preferred full-feature model, and the reduced
+    model on K named features. Nothing is re-tuned after the test set is opened.
 
 Data: Wolberg, Mangasarian, Street & Street (1993), Breast Cancer Wisconsin
 (Diagnostic), UCI Machine Learning Repository. https://doi.org/10.24432/C5DW2B
@@ -45,11 +46,13 @@ from sklearn.inspection import permutation_importance
 from sklearn.metrics import (roc_auc_score, roc_curve, confusion_matrix,
                              accuracy_score)
 
+import os
+
 SEED = 451
 rng = np.random.default_rng(SEED)
 OUT = {}                      # numbers the report/slides quote
 FIGDIR = "figures"
-import os
+CACHE = "wdbc.csv"            # so a rerun does not depend on UCI being up
 os.makedirs(FIGDIR, exist_ok=True)
 
 # ---------------------------------------------------------------- style ----
@@ -77,13 +80,31 @@ def pretty(c):
 
 # ============================================================== 1. DATA ====
 # %%
-wdbc = fetch_ucirepo(id=17)
-X = wdbc.data.features.copy()
 FEATS = ["radius", "texture", "perimeter", "area", "smoothness", "compactness",
          "concavity", "concave_points", "symmetry", "fractal_dimension"]
 COLS = [f"{s}_{f}" for s in ["mean", "se", "worst"] for f in FEATS]
+# Which of the ten measurements describe the same biological thing. Used both
+# to summarise the chosen feature set and to pick the panels of Figure 2.
+GROUPS = {"Size": ["radius", "perimeter", "area"],
+          "Shape": ["compactness", "concavity", "concave_points"],
+          "Texture": ["texture"],
+          "Smoothness": ["smoothness", "symmetry", "fractal_dimension"]}
+GROUP_OF = {f: g.lower() for g, fs in GROUPS.items() for f in fs}
+
+if os.path.exists(CACHE):
+    raw = pd.read_csv(CACHE)
+else:
+    wdbc = fetch_ucirepo(id=17)
+    raw = pd.concat([wdbc.data.features, wdbc.data.targets], axis=1)
+    raw.to_csv(CACHE, index=False)
+X = raw.drop(columns=["Diagnosis"])
+# UCI ships the ten measurements in three blocks suffixed 1/2/3 (mean, standard
+# error, worst). We rename positionally, so verify the order first -- a silent
+# reordering upstream would mislabel every feature in the report.
+assert list(X.columns) == [f"{f}{i}" for i in (1, 2, 3) for f in FEATS], \
+    f"unexpected UCI column order: {list(X.columns)}"
 X.columns = COLS
-y = wdbc.data.targets["Diagnosis"].map({"M": 1, "B": 0}).values
+y = raw["Diagnosis"].map({"M": 1, "B": 0}).values
 
 OUT["n"], OUT["p"] = X.shape
 OUT["n_malignant"] = int(y.sum())
@@ -217,6 +238,14 @@ OUT["cv_table"] = [(n, round(float(r.auc), 4), round(float(r.sd), 4), str(r.para
 OUT["best_cv_auc"] = round(float(cvtab.iloc[0].auc), 4)
 OUT["worst_cv_auc"] = round(float(cvtab.iloc[-1].auc), 4)
 OUT["auc_spread"] = round(OUT["best_cv_auc"] - OUT["worst_cv_auc"], 4)
+OUT["best_params"] = results[BEST]["params"]
+OUT["runner_up"] = cvtab.index[1]
+OUT["runner_up_gap"] = round(float(cvtab.iloc[0].auc - cvtab.iloc[1].auc), 4)
+# How many rivals are indistinguishable from the winner, and how far back the
+# laggard is -- both quoted in the report, so neither gets typed by hand.
+OUT["n_within_001"] = int((cvtab.auc.astype(float)
+                           >= float(cvtab.iloc[0].auc) - 0.001).sum() - 1)
+OUT["tree_auc"] = round(float(results["Decision tree"]["auc"]), 4)
 print(f"\nBest by CV AUC: {BEST}")
 
 # Fig 4: model comparison -- deliberately small, it is not the headline.
@@ -252,8 +281,10 @@ sel = pd.DataFrame(0, index=range(B), columns=COLS)
 Xtr_v, ytr_v = Xtr.values, ytr
 for b in range(B):
     idx = rng.choice(len(Xtr_v), len(Xtr_v), replace=True)
-    if len(np.unique(ytr_v[idx])) < 2:
-        continue
+    # Redraw rather than skip: a skipped row would stay all-zero and count as a
+    # resample that selected nothing, deflating every frequency.
+    while len(np.unique(ytr_v[idx])) < 2:
+        idx = rng.choice(len(Xtr_v), len(Xtr_v), replace=True)
     # liblinear shuffles internally -- seed it, or the stability numbers move
     # between runs and the analysis stops being reproducible.
     p = pipe(LogisticRegression(penalty="l1", solver="liblinear", max_iter=5000,
@@ -268,6 +299,15 @@ size_block = ["mean_radius", "mean_perimeter", "mean_area",
 OUT["size_freq"] = {pretty(c): round(float(freq[c]), 1) for c in size_block}
 OUT["size_any"] = round(float(sel[size_block].any(axis=1).mean() * 100), 1)
 OUT["size_max"] = round(float(freq[size_block].max()), 1)
+
+# The most stable feature is the one the report tells a story about, so export
+# every number that story quotes instead of typing them into the prose by hand.
+TEX = freq.index[0]
+OUT["stable_first"] = pretty(TEX)
+OUT["stable_first_freq"] = round(float(freq[TEX]), 1)
+OUT["stable_first_rank"] = int(list(uni_pow.index).index(TEX) + 1)
+OUT["stable_first_auc"] = round(float(uni_pow[TEX]), 2)
+OUT["stable_first_r_size"] = round(float(corr.loc[TEX, size_block].abs().max()), 2)
 print("\nBootstrap selection frequency (%), top 10:")
 print(freq.head(10).round(1))
 print(f"\nA size feature is selected in {OUT['size_any']}% of resamples, but no "
@@ -384,14 +424,31 @@ OUT["auc_k"] = {k: round(float(v), 4) for k, v in zip(ks, auc_raw)}
 OUT["auc_pca_k"] = {k: round(float(v), 4) for k, v in zip(ks, auc_pca)}
 OUT["full30_auc"] = round(float(full_auc), 4)
 
-# smallest k within 0.005 AUC of all 30 features
-K = next(k for k, v in zip(ks, auc_raw) if v >= full_auc - 0.005)
-OUT["K"] = K
+# Smallest k whose CV AUC comes within TOL of all 30 features. TOL is a
+# judgement call, and k=6 clears the 0.005 bar by well under a fold's worth of
+# noise, so report the stricter answer too rather than let 6 look inevitable.
+def smallest_k(tol):
+    ok = [k for k, v in zip(ks, auc_raw) if v >= full_auc - tol]
+    if not ok:
+        raise RuntimeError(f"no k in {ks} lands within {tol} AUC of all 30")
+    return ok[0]
+
+K, K_STRICT = smallest_k(0.005), smallest_k(0.002)
+OUT["K"], OUT["K_strict"] = K, K_STRICT
 OUT["auc_at_K"] = round(float(auc_raw[ks.index(K)]), 4)
+OUT["auc_at_K_strict"] = round(float(auc_raw[ks.index(K_STRICT)]), 4)
+OUT["K_margin"] = round(float(auc_raw[ks.index(K)] - (full_auc - 0.005)), 4)
+OUT["pca_gain_at_K"] = round(float(auc_pca[ks.index(K)] - auc_raw[ks.index(K)]), 4)
 FINAL_FEATURES = kept[:K]
 OUT["final_features"] = [pretty(c) for c in FINAL_FEATURES]
+# e.g. "two of size, three of shape, one of texture"
+NUMWORD = {1: "one", 2: "two", 3: "three", 4: "four", 5: "five", 6: "six"}
+mix = pd.Series([GROUP_OF[c.split("_", 1)[1]] for c in FINAL_FEATURES]
+                ).value_counts()
+OUT["final_mix"] = ", ".join(f"{NUMWORD[n]} {g}" for g, n in mix.items())
 print(f"\n{K} features reach CV AUC {OUT['auc_at_K']} vs {OUT['full30_auc']} "
-      f"for all 30.\nChosen: {OUT['final_features']}")
+      f"for all 30 (margin {OUT['K_margin']}; at tol 0.002 it would be "
+      f"{K_STRICT}).\nChosen ({OUT['final_mix']}): {OUT['final_features']}")
 
 # PCA scree, for the sentence in the report that has to introduce it
 pca_full = PCA().fit(StandardScaler().fit_transform(Xtr))
@@ -425,6 +482,7 @@ ax.set_ylabel("Cross-validated ROC-AUC")
 ax.set_xticks(ks); ax.legend(loc="lower right")
 ax.set_title("Six features get most of what all thirty give", loc="left", pad=10)
 gap = max(auc_pca[i] - auc_raw[i] for i in range(1, len(ks)))
+OUT["pca_gain_max"] = round(float(gap), 4)
 ax.text(0, -0.30, f"From two features on, components lead, but by at most "
         f"{gap:.3f} AUC, and no component is something a\npathologist can "
         "measure. Features are re-ranked inside every fold, so the curve is not "
@@ -442,10 +500,6 @@ def smooth_prob(x, lab, grid):
     return (w * lab).sum(1) / np.maximum(w.sum(1), 1e-9)
 
 # One representative per biological group -- the most informative of each.
-GROUPS = {"Size": ["radius", "perimeter", "area"],
-          "Shape": ["compactness", "concavity", "concave_points"],
-          "Texture": ["texture"],
-          "Smoothness": ["smoothness", "symmetry", "fractal_dimension"]}
 panel = []
 for g, members in GROUPS.items():
     cands = [c for c in COLS if c.split("_", 1)[1] in members]
@@ -476,7 +530,11 @@ for ax, (grp, c) in zip(axes.ravel(), panel):
     ax.set_yticks([0, .5, 1]); ax.set_yticklabels(["0", ".5", "1"])
     ax.set_xlabel(pretty(c))
     ax.set_title(f"{grp}", loc="left", fontsize=12.5)
-    ax.set_title(f"AUC {uni_pow[c]:.3f}", loc="right", fontsize=11, color=INK2)
+    # uni_pow is direction-corrected, so spell out when a feature runs the other
+    # way rather than printing a number that reads like a plain AUC.
+    lab = (f"AUC {uni_auc[c]:.3f}" if uni_auc[c] >= 0.5
+           else f"AUC {1 - uni_auc[c]:.3f} (reversed)")
+    ax.set_title(lab, loc="right", fontsize=11, color=INK2)
 for ax in axes[:, 0]:
     ax.set_ylabel(r"$\hat{P}$(malignant)")
 fig.suptitle("Size and shape almost separate the two groups;\n"
@@ -602,7 +660,13 @@ OUT["threshold_reduced"] = round(THRESH_R, 3)
 
 # ================================================================ TEST =====
 # %%
-# Everything above used the training set only. This block runs once.
+# Everything above used the training set only. This block runs once, and scores
+# the two models that were fully specified before it ran -- the full-feature
+# preferred model and the K-feature reduced one. Nothing below re-tunes anything.
+#
+# Caveat carried into the report: THRESH was picked on out-of-fold probabilities,
+# but is applied to a model refit on all of Xtr. The refit model's probabilities
+# are a little sharper, so the 98% sensitivity floor transfers approximately.
 final.fit(Xtr, ytr)
 pte = final.predict_proba(Xte)[:, 1]
 pred = (pte >= THRESH).astype(int)
@@ -631,7 +695,7 @@ OUT["fp_per100_benign"] = round(100 * fp / (tn + fp), 1)
 # overfitting check
 OUT["train_auc_best"] = round(float(roc_auc_score(ytr, final.predict_proba(Xtr)[:, 1])), 4)
 
-print(f"\n=== TEST SET (used once, n={OUT['n_test']}) ===")
+print(f"\n=== TEST SET (one pass, two pre-specified models, n={OUT['n_test']}) ===")
 print(f"{BEST}: AUC {OUT['test_auc']}, accuracy {OUT['test_acc']}% "
       f"(baseline {OUT['baseline_acc']}%), sensitivity {OUT['test_sens']}%, "
       f"specificity {OUT['test_spec']}%  [FN={fn}, FP={fp}]")
