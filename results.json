@@ -119,6 +119,14 @@
   "best_cv_auc": 0.9963,
   "worst_cv_auc": 0.9623,
   "auc_spread": 0.034,
+  "best_params": {
+    "C": 10,
+    "gamma": 0.01
+  },
+  "runner_up": "SVM (linear)",
+  "runner_up_gap": 0.0004,
+  "n_within_001": 3,
+  "tree_auc": 0.9623,
   "l1_C": 0.5,
   "l1_nonzero": 13,
   "stability_top": [
@@ -173,6 +181,11 @@
   },
   "size_any": 100.0,
   "size_max": 88.5,
+  "stable_first": "worst texture",
+  "stable_first_freq": 100.0,
+  "stable_first_rank": 17,
+  "stable_first_auc": 0.79,
+  "stable_first_r_size": 0.37,
   "perm_top": [
     [
       "worst texture",
@@ -238,7 +251,11 @@
   },
   "full30_auc": 0.995,
   "K": 6,
+  "K_strict": 7,
   "auc_at_K": 0.9905,
+  "auc_at_K_strict": 0.9936,
+  "K_margin": 0.0005,
+  "pca_gain_at_K": 0.004,
   "final_features": [
     "worst perimeter",
     "mean concavity",
@@ -247,9 +264,11 @@
     "se concave pts",
     "worst texture"
   ],
+  "final_mix": "three shape, two size, one texture",
   "pc1_var": 45.1,
   "pc12_var": 64.0,
   "pc_for_95": 10,
+  "pca_gain_max": 0.0087,
   "panel": [
     [
       "Size",
