@@ -176,37 +176,38 @@
   "perm_top": [
     [
       "worst texture",
-      0.0061
+      0.0086
     ],
     [
       "se radius",
-      0.0021
-    ],
-    [
-      "se compactness",
-      0.002
+      0.0043
     ],
     [
       "mean concave pts",
-      0.0015
+      0.0037
     ],
     [
-      "se fractal dimension",
-      0.001
-    ],
-    [
-      "se perimeter",
-      0.001
+      "se compactness",
+      0.0024
     ],
     [
       "worst radius",
-      0.0008
+      0.0024
+    ],
+    [
+      "mean concavity",
+      0.0022
+    ],
+    [
+      "worst concave pts",
+      0.0022
     ],
     [
       "worst area",
-      0.0008
+      0.002
     ]
   ],
+  "perm_first": "worst texture",
   "auc_k": {
     "1": 0.9721,
     "2": 0.9807,
@@ -275,7 +276,8 @@
     "worst radius",
     "worst smoothness"
   ],
-  "pair_auc": 0.986,
+  "pair_auc": 0.9831,
+  "pair_screen_auc": 0.986,
   "pair_r": 0.22,
   "threshold": 0.147,
   "target_sens": 98,
