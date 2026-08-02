@@ -17,7 +17,11 @@ Data: Wolberg, Mangasarian, Street & Street (1993), Breast Cancer Wisconsin
 """
 # %%
 import warnings
-warnings.filterwarnings("ignore")
+# Only silence the two we have checked and accept. A blanket ignore would also
+# hide ConvergenceWarning, and then we could not tell a converged fit from one
+# that quietly ran out of iterations.
+warnings.filterwarnings("ignore", category=FutureWarning)
+warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 import json
 import numpy as np
@@ -27,6 +31,7 @@ import matplotlib.pyplot as plt
 from matplotlib.colors import LinearSegmentedColormap
 
 from ucimlrepo import fetch_ucirepo
+from sklearn.base import clone
 from sklearn.model_selection import (train_test_split, StratifiedKFold,
                                      GridSearchCV, cross_val_predict)
 from sklearn.pipeline import Pipeline
@@ -309,12 +314,21 @@ fig.text(0.02, -0.05, "Some size feature survives in "
 fig.tight_layout()
 fig.savefig(f"{FIGDIR}/fig6_stability.png"); plt.close(fig)
 
-# 4c. Third view: permutation importance on the best model (grouped tolerance).
-pi = permutation_importance(fitted[BEST], Xtr, ytr, n_repeats=30,
-                            random_state=SEED, scoring="roc_auc")
-perm = pd.Series(pi.importances_mean, index=COLS).sort_values(ascending=False)
+# 4c. Third view: permutation importance, computed OUT OF FOLD. Permuting the
+# same rows the model was fit on measures what it leaned on in sample, which
+# flatters whatever it overfit. Refit per fold and permute held-out rows only.
+perm_folds = []
+for tr_i, va_i in cv.split(Xtr, ytr):
+    est = clone(fitted[BEST]).fit(Xtr.iloc[tr_i], ytr[tr_i])
+    pi = permutation_importance(est, Xtr.iloc[va_i], ytr[va_i], n_repeats=10,
+                                random_state=SEED, scoring="roc_auc")
+    perm_folds.append(pi.importances_mean)
+perm = (pd.Series(np.mean(perm_folds, axis=0), index=COLS)
+        .sort_values(ascending=False))
 OUT["perm_top"] = [(pretty(c), round(v, 4)) for c, v in perm.head(8).items()]
-print("\nPermutation importance, top 8:"); print(perm.head(8).round(4))
+OUT["perm_first"] = pretty(perm.index[0])
+print("\nPermutation importance (out of fold), top 8:")
+print(perm.head(8).round(4))
 
 # ================================ 5. HOW FEW FEATURES DO WE NEED? ==========
 # %%
@@ -478,7 +492,11 @@ fig.savefig(f"{FIGDIR}/fig2_curves.png"); plt.close(fig)
 
 # ============ 7. TWO FEATURES AT ONCE: THE DECISION SURFACE ================
 # %%
-# Best 2-feature pair by CV AUC, restricted to low-correlation pairs.
+# Best 2-feature pair, restricted to low-correlation pairs. This loop is a
+# SCREEN, not an estimate: it maximises CV AUC over ~190 candidate pairs, so
+# the winning value is optimistically biased (winner's curse) and is not
+# quoted anywhere. The reported number is recomputed below for the one pair
+# this picks, using the same model the figure draws.
 # Pool must reach past the size/shape block -- texture ranks 17th on its own
 # but is the natural complement to size, and that is the point of the figure.
 cands = list(uni_pow.head(20).index)
@@ -497,11 +515,22 @@ for i in range(len(cands)):
         if np.mean(s) > best_pair_auc:
             best_pair_auc, best_pair = np.mean(s), (a, b)
 A, Bf = best_pair
+# The figure below draws an RBF-SVM surface. Quote that model's CV AUC, not the
+# logistic screen's, or the number in the title describes a different model
+# from the one in the picture.
+pair_cv = []
+for tr_i, va_i in cv.split(Xtr, ytr):
+    q = pipe(SVC(kernel="rbf", probability=True, C=1, random_state=SEED))
+    q.fit(Xtr.iloc[tr_i][[A, Bf]], ytr[tr_i])
+    pair_cv.append(roc_auc_score(
+        ytr[va_i], q.predict_proba(Xtr.iloc[va_i][[A, Bf]])[:, 1]))
 OUT["pair"] = [pretty(A), pretty(Bf)]
-OUT["pair_auc"] = round(float(best_pair_auc), 4)
+OUT["pair_auc"] = round(float(np.mean(pair_cv)), 4)
+OUT["pair_screen_auc"] = round(float(best_pair_auc), 4)
 OUT["pair_r"] = round(float(corr.loc[A, Bf]), 2)
-print(f"\nBest low-correlation pair: {OUT['pair']} -> CV AUC {OUT['pair_auc']} "
-      f"(r={OUT['pair_r']})")
+print(f"\nBest low-correlation pair: {OUT['pair']} -> RBF-SVM CV AUC "
+      f"{OUT['pair_auc']} (r={OUT['pair_r']}; logistic screen said "
+      f"{OUT['pair_screen_auc']}, biased high by the search)")
 
 surf = pipe(SVC(kernel="rbf", probability=True, C=1, random_state=SEED))
 surf.fit(Xtr[[A, Bf]], ytr)
@@ -510,7 +539,10 @@ ax_hi = [np.percentile(Xtr[c], 99.5) for c in (A, Bf)]
 gx = np.linspace(ax_lo[0], ax_hi[0], 300)
 gy = np.linspace(ax_lo[1], ax_hi[1], 300)
 GX, GY = np.meshgrid(gx, gy)
-Z = surf.predict_proba(np.c_[GX.ravel(), GY.ravel()])[:, 1].reshape(GX.shape)
+# Grid as a frame, not a bare array: surf was fit with feature names, and
+# predicting on a nameless array warns.
+grid_df = pd.DataFrame(np.c_[GX.ravel(), GY.ravel()], columns=[A, Bf])
+Z = surf.predict_proba(grid_df)[:, 1].reshape(GX.shape)
 
 fig, ax = plt.subplots(figsize=(8.6, 6.6))
 im = ax.contourf(GX, GY, Z, levels=np.linspace(0, 1, 21), cmap=DIVERGE, alpha=.92)
@@ -528,12 +560,13 @@ ax.legend(loc="lower right", facecolor=SURFACE, framealpha=.9, frameon=True,
 cb = fig.colorbar(im, ax=ax, fraction=0.045, pad=0.02,
                   ticks=[0, .25, .5, .75, 1])
 cb.set_label(r"$\hat{P}$(malignant)", color=INK2); cb.outline.set_visible(False)
-ax.set_title(f"Worst radius and worst smoothness\n"
+ax.set_title(f"{pretty(A).capitalize()} and {pretty(Bf)}\n"
              f"(cross-validated AUC {OUT['pair_auc']:.3f}, r = {OUT['pair_r']})",
              loc="left", pad=12)
-ax.text(0, -0.155, "Black line = the 50% decision boundary. Shading = fitted "
-        "probability from an RBF-kernel SVM.", transform=ax.transAxes,
-        fontsize=10.5, color=INK2)
+ax.text(0, -0.155, "Black line = the 50% decision boundary. Shading and AUC "
+        "are both from the RBF-kernel SVM drawn here. Best pair of a search, "
+        "so the AUC is a\nceiling rather than an unbiased estimate.",
+        transform=ax.transAxes, fontsize=10.5, color=INK2)
 fig.savefig(f"{FIGDIR}/fig3_surface.png"); plt.close(fig)
 
 # ===================== 8. CHOOSE THE OPERATING POINT, THEN TEST ONCE =======

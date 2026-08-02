@@ -92,7 +92,7 @@ SLIDES.append(slide(
     "Dhruvika", "A surprise", "One result we did not expect",
     points=[
         "<b>worst texture</b> is kept in <b>100%</b> of resamples and comes "
-        "<b>first</b> on permutation importance.",
+        "<b>first</b> on out-of-fold permutation importance.",
         "But on its own it ranks only <b>17th of 30</b> (AUC 0.79).",
         "We think that is because it is almost uncorrelated with size "
         "(r&nbsp;=&nbsp;0.37).",
@@ -103,10 +103,11 @@ SLIDES.append(slide(
 SLIDES.append(slide(
     "Kalynn", "Two features at once", "Putting two measurements together",
     fig="fig3_surface.png",
-    note=f"Worst radius and worst smoothness, r = {R['pair_r']}, "
-         f"cross-validated AUC {R['pair_auc']:.3f}. A big nucleus is malignant "
-         f"whatever its smoothness. Smoothness only changes the answer for "
-         f"mid-sized ones."))
+    note=f"{R['pair'][0].capitalize()} and {R['pair'][1]}, r = {R['pair_r']}, "
+         f"cross-validated AUC {R['pair_auc']:.3f} for the RBF-SVM drawn here. "
+         f"It is the best pair of a search, so treat that AUC as a ceiling. "
+         f"A big nucleus is malignant whatever its smoothness. Smoothness only "
+         f"changes the answer for mid-sized ones."))
 
 SLIDES.append(slide(
     "Kalynn", "Choosing the cutoff",

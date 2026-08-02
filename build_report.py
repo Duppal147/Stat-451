@@ -40,7 +40,7 @@ kept every time, but which one is close to random: worst radius
 {R['size_freq']['mean perimeter']:.0f}%. Size matters; no one size column does.</p>
 
 <p>The feature it keeps most reliably is <b>worst texture</b>, in 100% of
-resamples and first on permutation importance, though alone it ranks only 17th
+resamples and first on out-of-fold permutation importance, though alone it ranks only 17th
 of 30 (AUC 0.79). Because it is almost uncorrelated with size
 (r&nbsp;=&nbsp;0.37), it adds what size cannot (Figure 4). Across all ten, the
 &ldquo;worst&rdquo; versions beat the means
@@ -84,10 +84,11 @@ FIGS = [  # captions are f-strings where they quote numbers
      "measurements&rsquo; worth of information."),
     ("fig6_stability.png", "Figure 3.", "Bootstrap selection frequency: LASSO "
      "always wants size, but cannot say which size feature."),
-    ("fig3_surface.png", "Figure 4.", "Worst radius and worst smoothness, the best "
-     f"pair of uncorrelated measurements (cross-validated AUC {R['pair_auc']:.3f}). "
-     "A large nucleus is malignant whatever its smoothness; smoothness only "
-     "matters for mid-sized ones."),
+    ("fig3_surface.png", "Figure 4.", f"{R['pair'][0].capitalize()} and "
+     f"{R['pair'][1]}, the best pair of uncorrelated measurements we found "
+     f"(RBF-SVM, cross-validated AUC {R['pair_auc']:.3f}; best of a search, so "
+     "a ceiling rather than an unbiased estimate). A large nucleus is malignant "
+     "whatever its smoothness; smoothness only matters for mid-sized ones."),
     ("fig5_howfew.png", "Figure 5.", "Cross-validated discrimination against the "
      "number of features retained."),
     ("fig7_test.png", "Figure 6.", "Performance on the 114 test masses, used once."),
