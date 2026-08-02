@@ -1,0 +1,302 @@
+{
+  "n": 569,
+  "p": 30,
+  "n_malignant": 212,
+  "n_benign": 357,
+  "pct_malignant": 37.3,
+  "baseline_acc": 62.7,
+  "n_train": 455,
+  "n_test": 114,
+  "pairs_r90": 21,
+  "n_pairs": 435,
+  "max_r": 0.998,
+  "max_r_pair": "mean radius & mean perimeter",
+  "inverse_features": [
+    [
+      "se symmetry",
+      0.424
+    ],
+    [
+      "se smoothness",
+      0.467
+    ],
+    [
+      "mean fractal dimension",
+      0.486
+    ],
+    [
+      "se texture",
+      0.498
+    ]
+  ],
+  "uni_top": [
+    [
+      "worst perimeter",
+      0.973
+    ],
+    [
+      "worst radius",
+      0.969
+    ],
+    [
+      "worst area",
+      0.968
+    ],
+    [
+      "worst concave pts",
+      0.965
+    ],
+    [
+      "mean concave pts",
+      0.961
+    ],
+    [
+      "mean perimeter",
+      0.942
+    ]
+  ],
+  "distinct_features": [
+    "worst perimeter",
+    "mean concavity",
+    "se area",
+    "worst compactness",
+    "se concave pts",
+    "worst texture",
+    "se concavity",
+    "worst smoothness"
+  ],
+  "n_distinct": 15,
+  "group_power": {
+    "mean": 0.826,
+    "se": 0.715,
+    "worst": 0.861
+  },
+  "best_model": "SVM (RBF)",
+  "cv_table": [
+    [
+      "SVM (RBF)",
+      0.9963,
+      0.005,
+      "{'C': 10, 'gamma': 0.01}"
+    ],
+    [
+      "SVM (linear)",
+      0.9959,
+      0.0052,
+      "{'C': 0.1}"
+    ],
+    [
+      "Logistic (L2)",
+      0.9955,
+      0.0054,
+      "{'C': 0.1}"
+    ],
+    [
+      "PCA + logistic",
+      0.9955,
+      0.0054,
+      "{'C': 0.1, 'n_components': 10}"
+    ],
+    [
+      "Logistic (L1)",
+      0.9951,
+      0.0044,
+      "{'C': 0.5}"
+    ],
+    [
+      "k-NN",
+      0.9912,
+      0.0077,
+      "{'n_neighbors': 15, 'weights': 'distance'}"
+    ],
+    [
+      "Decision tree",
+      0.9623,
+      0.0255,
+      "{'max_depth': None, 'min_samples_leaf': 5}"
+    ]
+  ],
+  "best_cv_auc": 0.9963,
+  "worst_cv_auc": 0.9623,
+  "auc_spread": 0.034,
+  "l1_C": 0.5,
+  "l1_nonzero": 13,
+  "stability_top": [
+    [
+      "worst texture",
+      100.0
+    ],
+    [
+      "worst concave pts",
+      92.0
+    ],
+    [
+      "worst smoothness",
+      92.0
+    ],
+    [
+      "se radius",
+      92.0
+    ],
+    [
+      "worst concavity",
+      89.5
+    ],
+    [
+      "worst radius",
+      88.5
+    ],
+    [
+      "mean concave pts",
+      86.5
+    ],
+    [
+      "worst symmetry",
+      77.5
+    ],
+    [
+      "se fractal dimension",
+      67.5
+    ],
+    [
+      "se compactness",
+      67.0
+    ]
+  ],
+  "size_freq": {
+    "mean radius": 3.0,
+    "mean perimeter": 0.0,
+    "mean area": 2.5,
+    "worst radius": 88.5,
+    "worst perimeter": 22.5,
+    "worst area": 51.5
+  },
+  "size_any": 100.0,
+  "size_max": 88.5,
+  "perm_top": [
+    [
+      "worst texture",
+      0.0061
+    ],
+    [
+      "se radius",
+      0.0021
+    ],
+    [
+      "se compactness",
+      0.002
+    ],
+    [
+      "mean concave pts",
+      0.0015
+    ],
+    [
+      "se fractal dimension",
+      0.001
+    ],
+    [
+      "se perimeter",
+      0.001
+    ],
+    [
+      "worst radius",
+      0.0008
+    ],
+    [
+      "worst area",
+      0.0008
+    ]
+  ],
+  "auc_k": {
+    "1": 0.9721,
+    "2": 0.9807,
+    "3": 0.9827,
+    "4": 0.9833,
+    "5": 0.9888,
+    "6": 0.9905,
+    "7": 0.9936,
+    "8": 0.9943,
+    "9": 0.9937,
+    "10": 0.9941,
+    "11": 0.9941,
+    "12": 0.9939
+  },
+  "auc_pca_k": {
+    "1": 0.9671,
+    "2": 0.9877,
+    "3": 0.9871,
+    "4": 0.992,
+    "5": 0.9923,
+    "6": 0.9945,
+    "7": 0.9946,
+    "8": 0.995,
+    "9": 0.9945,
+    "10": 0.9943,
+    "11": 0.995,
+    "12": 0.9947
+  },
+  "full30_auc": 0.995,
+  "K": 6,
+  "auc_at_K": 0.9905,
+  "final_features": [
+    "worst perimeter",
+    "mean concavity",
+    "se area",
+    "worst compactness",
+    "se concave pts",
+    "worst texture"
+  ],
+  "pc1_var": 45.1,
+  "pc12_var": 64.0,
+  "pc_for_95": 10,
+  "panel": [
+    [
+      "Size",
+      "worst perimeter",
+      0.973
+    ],
+    [
+      "Shape",
+      "worst concave pts",
+      0.965
+    ],
+    [
+      "Texture",
+      "worst texture",
+      0.786
+    ],
+    [
+      "Smoothness",
+      "worst smoothness",
+      0.756
+    ]
+  ],
+  "pair": [
+    "worst radius",
+    "worst smoothness"
+  ],
+  "pair_auc": 0.986,
+  "pair_r": 0.22,
+  "threshold": 0.147,
+  "target_sens": 98,
+  "oof_sens": 98.2,
+  "oof_spec": 93.0,
+  "threshold_reduced": 0.171,
+  "test_auc": 0.9987,
+  "test_acc": 96.5,
+  "test_sens": 100.0,
+  "test_spec": 94.4,
+  "tn": 68,
+  "fp": 4,
+  "fn": 0,
+  "tp": 42,
+  "test_auc_reduced": 0.994,
+  "test_acc_reduced": 93.9,
+  "test_sens_reduced": 100.0,
+  "test_spec_reduced": 90.3,
+  "fn_reduced": 0,
+  "fp_reduced": 7,
+  "fn_per100_malig": 0.0,
+  "fp_per100_benign": 5.6,
+  "train_auc_best": 0.9979
+}
